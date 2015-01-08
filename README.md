@@ -94,7 +94,16 @@ Note - if you do NOT have this running, make sure to set `QueuedJobService::$use
 so that immediate mode jobs don't stall. By setting this to true, immediate jobs will be executed after
 the request finishes as the php script ends. 
 
+## Using Amazon SQS for running jobs
 
+Add the following to your project's config.yml file:
+```
+    Injector:
+      QueueHandler: 
+        class: AmazonQueueHandler
+```
+
+You also need to define the constants AWS_ACCESS_KEY, AWS_ACCESS_SECRET, and AWS_REGION_NAME in your _ss_environment file as per Amazon guidelines. For more information about these constants, visit http://docs.aws.amazon.com/aws-sdk-php/guide/latest/service-sqs.html.
 ## Troubleshooting
 
 To make sure your job works, you can first try to execute the job directly outside the framework of the
