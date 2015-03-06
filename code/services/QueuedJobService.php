@@ -291,7 +291,7 @@ class QueuedJobService {
 	 * @param QueuedJobDescriptor $jobDescriptor
 	 *			The Job descriptor of a job to prepare for execution
 	 *
-	 * @return QueuedJob
+	 * @return QueuedJob, or false if already started
 	 */
 	protected function initialiseJob(QueuedJobDescriptor $jobDescriptor) {
 		// create the job class
@@ -301,26 +301,29 @@ class QueuedJobService {
 		if (!$job) {
 			throw new Exception("Implementation $impl no longer exists");
 		}
+		if($jobDescriptor->JobStatus == QueuedJob::STATUS_NEW) {
+			// start the init process
+			$jobDescriptor->JobStatus = QueuedJob::STATUS_INIT;
+			$jobDescriptor->write();
 
-		// start the init process
-		$jobDescriptor->JobStatus = QueuedJob::STATUS_INIT;
-		$jobDescriptor->write();
+			// make sure the data is there
+			$this->copyDescriptorToJob($jobDescriptor, $job);
 
-		// make sure the data is there
-		$this->copyDescriptorToJob($jobDescriptor, $job);
+			// see if it needs 'setup' or 'restart' called
+			if (!$jobDescriptor->StepsProcessed) {
+				$job->setup();
+			} else {
+				$job->prepareForRestart();
+			}
+			
+			// make sure the descriptor is up to date with anything changed
+			$this->copyJobToDescriptor($job, $jobDescriptor);
+			$jobDescriptor->write();
 
-		// see if it needs 'setup' or 'restart' called
-		if (!$jobDescriptor->StepsProcessed) {
-			$job->setup();
+			return $job;
 		} else {
-			$job->prepareForRestart();
+			return false;
 		}
-		
-		// make sure the descriptor is up to date with anything changed
-		$this->copyJobToDescriptor($job, $jobDescriptor);
-		$jobDescriptor->write();
-
-		return $job;
 	}
 
 	/**
@@ -389,8 +392,10 @@ class QueuedJobService {
 				$jobDescriptor->JobRestarted = date('Y-m-d H:i:s');
 			}
 			
-			$jobDescriptor->JobStatus = QueuedJob::STATUS_RUN;
-			$jobDescriptor->write();
+			if($jobDescriptor->JobStatus = QueuedJob::STATUS_INIT) {
+				$jobDescriptor->JobStatus = QueuedJob::STATUS_RUN;
+				$jobDescriptor->write();
+			}
 
 			$lastStepProcessed = 0;
 			// have we stalled at all?
