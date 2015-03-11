@@ -431,13 +431,26 @@ class QueuedJobService {
 				}
 
 				if (!$broken) {
+					$db = DB::conn();
+					$lockName = $job->ClassName . '' . $job->ID;
 					try {
+						if($db->supportsLocks()) {
+							$db->getLock($lockName);
+						}
+
 						$job->process();
+						
+						if($db->supportsLocks()) {
+							$db->releaseLock($lockName);
+						}
 					} catch (Exception $e) {
 						// okay, we'll just catch this exception for now
 						$job->addMessage(sprintf(_t('QueuedJobs.JOB_EXCEPT', 'Job caused exception %s in %s at line %s'), $e->getMessage(), $e->getFile(), $e->getLine()), 'ERROR');
 						SS_Log::log($e, SS_Log::ERR);
 						$jobDescriptor->JobStatus =  QueuedJob::STATUS_BROKEN;
+						if($db->supportsLocks()) {
+							$db->releaseLock($lockName);
+						}
 					}
 
 					// now check the job state
